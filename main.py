@@ -38,6 +38,7 @@ treinos = {
         "Panturrilha em pé"
     ]
 }
+
 # memória simples
 users = {}
 
@@ -50,40 +51,45 @@ def send_message(chat_id, text):
 @app.post("/webhook")
 async def webhook(req: Request):
     data = await req.json()
-
     chat_id = data["message"]["chat"]["id"]
     text = data["message"]["text"].lower()
 
+    # comando para resetar a conversa
+    if text == "/reset":
+        users[chat_id] = {"step": "objetivo", "objetivo": None, "peso": None, "dias": None}
+        send_message(chat_id, "Conversa reiniciada. Qual é seu objetivo? (hipertrofia, emagrecimento ou condicionamento)")
+        return {"ok": True}
+
     # se usuário não existe, cria
     if chat_id not in users:
-        users[chat_id] = {
-            "step": "objetivo",
-            "objetivo": None,
-            "peso": None,
-            "dias": None
-        }
+        users[chat_id] = {"step": "objetivo", "objetivo": None, "peso": None, "dias": None}
         send_message(chat_id, "Qual é seu objetivo? (hipertrofia, emagrecimento ou condicionamento)")
         return {"ok": True}
 
     user = users[chat_id]
 
-    # passo 1
+    # passo 1: objetivo
     if user["step"] == "objetivo":
         user["objetivo"] = text
         user["step"] = "peso"
         send_message(chat_id, "Qual é seu peso atual (em kg)?")
         return {"ok": True}
 
-    # passo 2
-    if user["step"] == "peso":
+    # passo 2: peso
+    elif user["step"] == "peso":
         user["peso"] = text
         user["step"] = "dias"
         send_message(chat_id, "Quantos dias por semana você treina?")
         return {"ok": True}
 
-    # passo 3
-    if user["step"] == "dias":
-        user["dias"] = int(text)
+    # passo 3: dias
+    elif user["step"] == "dias":
+        try:
+            user["dias"] = int(text)
+        except ValueError:
+            send_message(chat_id, "Por favor, digite apenas números para os dias de treino.")
+            return {"ok": True}
+
         objetivo = user["objetivo"]
 
         # definir divisão
@@ -108,4 +114,9 @@ async def webhook(req: Request):
 
         send_message(chat_id, treino_texto)
         user["step"] = "final"
+        return {"ok": True}
+
+    # caso o usuário já tenha completado o fluxo
+    elif user["step"] == "final":
+        send_message(chat_id, "Você já completou o fluxo. Digite /reset para começar novamente.")
         return {"ok": True}
