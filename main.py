@@ -82,30 +82,30 @@ async def webhook(req: Request):
         return {"ok": True}
 
     # passo 3
-   if user["step"] == "dias":
-    user["dias"] = int(text)
-    objetivo = user["objetivo"]
+    if user["step"] == "dias":
+        user["dias"] = int(text)
+        objetivo = user["objetivo"]
 
-    # definir divisão
-    if user["dias"] <= 2:
-        divisao = "Full Body"
-        exercicios = treinos["fullbody"]
-    else:
-        divisao = "ABC"
-        exercicios = treinos["a"] + treinos["b"] + treinos["c"]
+        # definir divisão
+        if user["dias"] <= 2:
+            divisao = "Full Body"
+            exercicios = treinos["fullbody"]
+        else:
+            divisao = "ABC"
+            exercicios = treinos["a"] + treinos["b"] + treinos["c"]
 
-    # definir repetições
-    if objetivo == "hipertrofia":
-        reps = "3x 8–12"
-    elif objetivo == "emagrecimento":
-        reps = "3x 12–15"
-    else:
-        reps = "3x 15+"
+        # definir repetições
+        if objetivo == "hipertrofia":
+            reps = "3x 8–12"
+        elif objetivo == "emagrecimento":
+            reps = "3x 12–15"
+        else:
+            reps = "3x 15+"
 
-    treino_texto = f"🏋️ Treino sugerido ({divisao})\n"
-    for ex in exercicios:
-        treino_texto += f"- {ex}: {reps}\n"
+        treino_texto = f"🏋️ Treino sugerido ({divisao})\n"
+        for ex in exercicios:
+            treino_texto += f"- {ex}: {reps}\n"
 
-    send_message(chat_id, treino_texto)
-    user["step"] = "final"
-    return {"ok": True}
+        send_message(chat_id, treino_texto)
+        user["step"] = "final"
+        return {"ok": True}
