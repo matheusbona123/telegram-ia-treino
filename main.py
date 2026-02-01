@@ -7,6 +7,37 @@ app = FastAPI()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 URL = f"https://api.telegram.org/bot{TOKEN}"
 
+# 🔹 DICIONÁRIO DE TREINOS
+treinos = {
+    "fullbody": [
+        "Agachamento livre",
+        "Supino reto",
+        "Remada curvada",
+        "Desenvolvimento com halteres",
+        "Abdominal prancha"
+    ],
+    "a": [
+        "Supino reto",
+        "Supino inclinado",
+        "Crucifixo",
+        "Tríceps testa",
+        "Tríceps corda"
+    ],
+    "b": [
+        "Puxada frontal",
+        "Remada baixa",
+        "Remada unilateral",
+        "Rosca direta",
+        "Rosca alternada"
+    ],
+    "c": [
+        "Agachamento",
+        "Leg press",
+        "Mesa flexora",
+        "Cadeira extensora",
+        "Panturrilha em pé"
+    ]
+}
 # memória simples
 users = {}
 
