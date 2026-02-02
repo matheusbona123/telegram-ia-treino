@@ -13,13 +13,20 @@ client = Groq(api_key=GROQ_API_KEY)
 
 
 # ======================
+# FUNÇÃO PARA ENVIAR MENSAGENS LONGAS
+# ======================
+def send_long_message(chat_id, text):
+    chunk_size = 4000  # Telegram corta acima de 4096
+    for i in range(0, len(text), chunk_size):
+        send_message(chat_id, text[i:i+chunk_size])
+
+
+# ======================
 # HANDLER PRINCIPAL
 # ======================
 async def process_message(chat_id: int, text: str, user: dict):
 
     text = text.strip().lower()
-
-    # INICIALIZA USUÁRIO
     user.setdefault("step", "objetivo")
 
     # ======================
@@ -29,7 +36,6 @@ async def process_message(chat_id: int, text: str, user: dict):
         send_message(
             chat_id,
             "🎯 Qual é seu objetivo?\n\n"
-            "Exemplo:\n"
             "- Hipertrofia\n"
             "- Emagrecimento\n"
             "- Definição\n"
@@ -152,6 +158,9 @@ Descanso:
 """
 
         try:
+            # ======================
+            # CHAMADA AO GROQ COM MAIS TOKENS
+            # ======================
             response = client.chat.completions.create(
                 model="llama-3.1-8b-instant",
                 messages=[
@@ -159,12 +168,15 @@ Descanso:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.5,
-                max_tokens=800
+                max_tokens=2000  # aumentei para permitir treinos longos
             )
 
             treino = response.choices[0].message.content.strip()
 
-            send_message(chat_id, f"🏋️‍♂️ *Treino Personalizado*\n\n{treino}")
+            # ======================
+            # ENVIO AUTOMÁTICO EM BLOCO
+            # ======================
+            send_long_message(chat_id, f"🏋️‍♂️ *Treino Personalizado*\n\n{treino}")
 
         except Exception as e:
             print("Erro Groq:", e)
