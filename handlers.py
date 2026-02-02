@@ -17,11 +17,11 @@ def send_long_message(chat_id, text):
 
 def escolher_tipo_treino(dias):
     if dias == 3:
-        return "Full Body (Corpo Inteiro)"
+        return "Full Body (Foco em exercícios compostos)"
     elif dias == 4:
-        return "Upper/Lower (Superior/Inferior)"
+        return "Upper/Lower (Divisão Superior e Inferior)"
     else:
-        return "Push/Pull/Legs (Empurrar/Puxar/Pernas)"
+        return "Push/Pull/Legs (Divisão Empurrar, Puxar e Pernas)"
 
 EXERCICIOS_VALIDOS = [
     "Supino Reto", "Supino Inclinado", "Agachamento", "Remada Curvada",
@@ -92,43 +92,44 @@ async def process_message(chat_id: int, text: str, user: dict):
 
     if user["step"] == "tempo":
         user["tempo"] = text
-        send_message(chat_id, "⏳ **A gerar a tua ficha de treino personalizada...**")
+        send_message(chat_id, "⏳ **Gerando sua ficha técnica...**")
         
         tipo_treino = escolher_tipo_treino(user["dias"])
         exercicios_str = ", ".join(EXERCICIOS_VALIDOS)
         
         prompt = f"""
-Você é um Personal Trainer de elite. Gere um treino COMPACTO e VISUAL para o Telegram.
-Aluno: {user['nivel']} | Foco: {user['objetivo']} | Tempo: {user['tempo']}min
+Você é um Personal Trainer de elite. Gere um treino para um aluno {user['nivel']}.
+Foco: {user['objetivo']} | Divisão: {tipo_treino} | Tempo: {user['tempo']}min
 
 ESTRUTURA OBRIGATÓRIA:
 - Use APENAS: {exercicios_str}.
-- Agrupe por treinos (Ex: TREINO A, TREINO B).
-- Para cada exercício, use APENAS UMA LINHA:
+- Divida o treino seguindo EXATAMENTE o modelo: {tipo_treino}.
+- FORMATO POR EXERCÍCIO:
   📍 **Nome** | 🔄 `3x12` | ⏳ `60s`
-  💡 *Dica: Instrução técnica real e curta.*
+  💡 *Dica: [Instrução CURTA e ESPECÍFICA para este movimento]*
 
-REGRAS:
-1. Sem apresentações longas ou repetições.
-2. Dicas técnicas específicas (não use a mesma para todos).
-3. Sem sub-tópicos ou listas aninhadas.
+REGRAS DE OURO:
+1. PROIBIDO repetir a mesma dica técnica.
+2. No Levantamento Terra e Agachamento, fale de "coluna neutra" e "base".
+3. Nas Roscas e Tríceps, fale de "cotovelos fixos".
+4. Vá direto aos treinos, sem introduções longas.
 """
 
         try:
             response = client.chat.completions.create(
                 model="llama-3.1-8b-instant",
-                messages=[{"role": "system", "content": "Você é um personal trainer direto e usa Markdown."},
+                messages=[{"role": "system", "content": "Você é um personal trainer direto que usa Markdown e nunca repete conselhos genéricos."},
                           {"role": "user", "content": prompt}],
-                temperature=0.4
+                temperature=0.3
             )
             treino = response.choices[0].message.content.strip()
             
-            # Envio limpo (sem o replace de asteriscos para manter negritos)
             send_long_message(chat_id, treino)
-            send_message(chat_id, "✅ **Treino pronto!** Foca-te na execução. /start para novo.")
+            send_message(chat_id, "✅ **Treino atualizado!** Bons ganhos. /start para recomeçar.")
             
         except Exception as e:
-            send_message(chat_id, "⚠️ Erro ao gerar treino. Tenta novamente.")
+            send_message(chat_id, "⚠️ Erro ao gerar treino. Tente novamente.")
 
-        user.clear()
-        user["step"] = "objetivo"
+    # Reset limpo
+    user.clear()
+    user["step"] = "objetivo"
