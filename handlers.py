@@ -3,7 +3,13 @@ from groq import Groq
 from bot import send_message
 
 # inicializa cliente Groq
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+if not GROQ_API_KEY:
+    raise RuntimeError("GROQ_API_KEY não definida")
+
+client = Groq(api_key=GROQ_API_KEY)
+
 
 async def process_message(chat_id: int, text: str, user: dict):
 
@@ -20,6 +26,7 @@ async def process_message(chat_id: int, text: str, user: dict):
             user["peso"] = float(text.replace(",", "."))
         except ValueError:
             raise ValueError("Informe o peso apenas com números (ex: 80)")
+
         user["step"] = "dias"
         send_message(chat_id, "Quantos dias por semana você treina?")
         return
@@ -27,37 +34,50 @@ async def process_message(chat_id: int, text: str, user: dict):
     # ETAPA 3 - DIAS
     if user["step"] == "dias":
         try:
-            user["dias"] = int(text)
+            dias = int(text)
+            if dias < 1 or dias > 6:
+                raise ValueError
+            user["dias"] = dias
         except ValueError:
-            raise ValueError("Informe apenas o número de dias (ex: 4)")
+            raise ValueError("Informe um número de dias válido (1 a 6)")
 
         send_message(chat_id, "⏳ Gerando seu treino personalizado...")
 
         prompt = f"""
-        Crie um treino de musculação detalhado para uma pessoa com:
-        - Objetivo: {user['objetivo']}
-        - Peso: {user['peso']} kg
-        - Dias de treino por semana: {user['dias']}
+Você é um personal trainer experiente.
 
-        Separe por dias, com exercícios, séries e repetições.
-        """
+Crie um treino de musculação seguro e eficiente com:
+- Objetivo: {user['objetivo']}
+- Peso: {user['peso']} kg
+- Dias de treino por semana: {user['dias']}
+
+Separe por dias da semana.
+Inclua aquecimento, exercícios, séries e repetições.
+Use linguagem clara para WhatsApp/Telegram.
+"""
 
         try:
             response = client.chat.completions.create(
                 model="llama-3.1-8b-instant",
                 messages=[
-                    {"role": "system", "content": "Você é um personal trainer experiente."},
+                    {"role": "system", "content": "Você é um personal trainer profissional."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.7
+                temperature=0.7,
+                max_tokens=700
             )
 
-            treino = response.choices[0].message.content
-            send_message(chat_id, treino)
+            if not response.choices:
+                raise RuntimeError("Resposta vazia da IA")
 
-            # reset do usuário
+            treino = response.choices[0].message.content.strip()
+
+            send_message(chat_id, f"🏋️‍♂️ **Treino Personalizado**\n\n{treino}")
+
+            # reset do fluxo
             user["step"] = "objetivo"
 
         except Exception as e:
             print("Erro Groq:", e)
             send_message(chat_id, "⚠️ Ocorreu um erro ao gerar o treino. Tente novamente.")
+            user["step"] = "objetivo"
