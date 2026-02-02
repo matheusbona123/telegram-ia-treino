@@ -30,29 +30,26 @@ async def process_message(chat_id, text, user):
         if not text.isdigit():
             raise ValueError("Digite um número válido de dias.")
         user["dias"] = int(text)
-        objetivo = user["objetivo"]
-        peso = user["peso"]
-        dias = user["dias"]
-
-        treino_texto = gerar_treino_ia(objetivo, peso, dias)
+        treino_texto = gerar_treino_ia(user["objetivo"], user["peso"], user["dias"])
         send_message(chat_id, treino_texto)
         user["step"] = "final"
         return
 
 def gerar_treino_ia(objetivo, peso, dias):
+    """Gera treino detalhado via OpenAI"""
     prompt = f"""
-    Você é um personal trainer. Crie um treino detalhado para uma pessoa com os seguintes dados:
-    - Objetivo: {objetivo}
-    - Peso: {peso}kg
-    - Dias de treino por semana: {dias}
-    Inclua aquecimento, exercícios principais, séries e repetições.
-    Varie os exercícios conforme objetivo. 
-    Escreva de forma clara e organizada.
-    """
+Você é um personal trainer. Crie um treino completo para uma pessoa com os seguintes dados:
+- Objetivo: {objetivo}
+- Peso: {peso}kg
+- Dias de treino por semana: {dias}
+Inclua aquecimento, exercícios principais, séries, repetições e dicas.
+Varie os exercícios conforme o objetivo e torne o treino seguro e eficiente.
+Escreva de forma clara e organizada para enviar no Telegram.
+"""
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=400
+        max_tokens=600
     )
     treino_texto = response.choices[0].message.content.strip()
     return f"🏋️ **Treino Personalizado**\n\n{treino_texto}"
