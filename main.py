@@ -1,32 +1,33 @@
 from fastapi import FastAPI, Request
-from bot import send_message
 from handlers import process_message
+from bot import send_message
 
 app = FastAPI()
 
-# memória simples dos usuários
 users = {}
 
 @app.post("/webhook")
 async def webhook(req: Request):
     data = await req.json()
 
-    # extrair informações do Telegram
     chat_id = data["message"]["chat"]["id"]
-    text = data["message"]["text"].lower()
+    text = data["message"]["text"]
 
-    # cria usuário se não existir
     if chat_id not in users:
-        users[chat_id] = {"step": "objetivo", "objetivo": None, "peso": None, "dias": None}
-
-    user = users[chat_id]
+        users[chat_id] = {
+            "step": "inicio",
+            "objetivo": None,
+            "peso": None,
+            "dias": None
+        }
+        # força a primeira pergunta
+        await process_message(chat_id, "", users[chat_id])
+        return {"ok": True}
 
     try:
-        await process_message(chat_id, text, user)
-    except ValueError as e:
-        send_message(chat_id, str(e))
+        await process_message(chat_id, text, users[chat_id])
     except Exception as e:
-        send_message(chat_id, "Ocorreu um erro, tente novamente.")
-        print(f"Erro: {e}")
+        print("Erro geral:", e)
+        send_message(chat_id, "⚠️ Ocorreu um erro. Tente novamente.")
 
     return {"ok": True}

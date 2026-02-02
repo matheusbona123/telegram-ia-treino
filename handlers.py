@@ -12,12 +12,37 @@ client = Groq(api_key=GROQ_API_KEY)
 
 
 async def process_message(chat_id: int, text: str, user: dict):
+    text = text.lower().strip()
+
+    # ETAPA 0 - INÍCIO
+    if user["step"] == "inicio":
+        user["step"] = "objetivo"
+        send_message(
+            chat_id,
+            "💪 Qual é seu objetivo?\n\n"
+            "👉 Digite uma opção:\n"
+            "- hipertrofia\n"
+            "- emagrecimento\n"
+            "- condicionamento"
+        )
+        return
 
     # ETAPA 1 - OBJETIVO
     if user["step"] == "objetivo":
+        if text not in ["hipertrofia", "emagrecimento", "condicionamento"]:
+            send_message(
+                chat_id,
+                "❌ Objetivo inválido.\n\n"
+                "Escolha uma opção:\n"
+                "- hipertrofia\n"
+                "- emagrecimento\n"
+                "- condicionamento"
+            )
+            return
+
         user["objetivo"] = text
         user["step"] = "peso"
-        send_message(chat_id, "Qual seu peso atual (em kg)?")
+        send_message(chat_id, "⚖️ Qual seu peso atual (em kg)?")
         return
 
     # ETAPA 2 - PESO
@@ -25,10 +50,11 @@ async def process_message(chat_id: int, text: str, user: dict):
         try:
             user["peso"] = float(text.replace(",", "."))
         except ValueError:
-            raise ValueError("Informe o peso apenas com números (ex: 80)")
+            send_message(chat_id, "❌ Informe o peso apenas com números (ex: 80)")
+            return
 
         user["step"] = "dias"
-        send_message(chat_id, "Quantos dias por semana você treina?")
+        send_message(chat_id, "📅 Quantos dias por semana você treina? (1 a 6)")
         return
 
     # ETAPA 3 - DIAS
@@ -39,7 +65,8 @@ async def process_message(chat_id: int, text: str, user: dict):
                 raise ValueError
             user["dias"] = dias
         except ValueError:
-            raise ValueError("Informe um número de dias válido (1 a 6)")
+            send_message(chat_id, "❌ Informe um número válido entre 1 e 6")
+            return
 
         send_message(chat_id, "⏳ Gerando seu treino personalizado...")
 
@@ -67,17 +94,14 @@ Use linguagem clara para WhatsApp/Telegram.
                 max_tokens=700
             )
 
-            if not response.choices:
-                raise RuntimeError("Resposta vazia da IA")
-
             treino = response.choices[0].message.content.strip()
 
             send_message(chat_id, f"🏋️‍♂️ **Treino Personalizado**\n\n{treino}")
 
-            # reset do fluxo
-            user["step"] = "objetivo"
+            # reset
+            user["step"] = "inicio"
 
         except Exception as e:
             print("Erro Groq:", e)
             send_message(chat_id, "⚠️ Ocorreu um erro ao gerar o treino. Tente novamente.")
-            user["step"] = "objetivo"
+            user["step"] = "inicio"
