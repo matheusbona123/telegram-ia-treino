@@ -3,19 +3,11 @@ import re
 from bot import send_message
 import openai
 
-# 🔐 OpenAI Key
-OPENAI_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_KEY:
-    raise ValueError("OPENAI_API_KEY não definido!")
-
-openai.api_key = OPENAI_KEY
-
 
 async def process_message(chat_id, text, user):
     step = user["step"]
     text = text.lower().strip()
 
-    # 🔹 PASSO 1 — OBJETIVO
     if step == "objetivo":
         if text not in ["hipertrofia", "emagrecimento", "condicionamento"]:
             send_message(
@@ -29,7 +21,6 @@ async def process_message(chat_id, text, user):
         send_message(chat_id, "Qual é seu peso atual (em kg)?")
         return
 
-    # 🔹 PASSO 2 — PESO
     if step == "peso":
         peso_texto = text.replace(",", ".")
         if not peso_texto.replace(".", "", 1).isdigit():
@@ -41,15 +32,11 @@ async def process_message(chat_id, text, user):
         send_message(chat_id, "Quantos dias por semana você treina?")
         return
 
-    # 🔹 PASSO 3 — DIAS
     if step == "dias":
         numeros = re.findall(r"\d+", text)
 
         if not numeros:
-            send_message(
-                chat_id,
-                "❌ Não entendi.\nDigite apenas o número de dias (ex: 3, 4 ou 5)."
-            )
+            send_message(chat_id, "❌ Digite apenas o número de dias (ex: 3, 4 ou 5).")
             return
 
         dias = int(numeros[0])
@@ -60,37 +47,46 @@ async def process_message(chat_id, text, user):
 
         user["dias"] = dias
 
-        # 🤖 GERAR TREINO COM IA
-        treino_texto = gerar_treino_ia(
-            user["objetivo"],
-            user["peso"],
-            user["dias"]
-        )
+        try:
+            treino_texto = gerar_treino_ia(
+                user["objetivo"],
+                user["peso"],
+                user["dias"]
+            )
+            send_message(chat_id, treino_texto)
+            user["step"] = "final"
 
-        send_message(chat_id, treino_texto)
-        user["step"] = "final"
+        except Exception as e:
+            send_message(
+                chat_id,
+                "⚠️ Ocorreu um erro ao gerar o treino. Tente novamente em instantes."
+            )
+            print("Erro IA:", e)
+
         return
 
 
 def gerar_treino_ia(objetivo, peso, dias):
-    """
-    Gera treino detalhado usando OpenAI
-    """
+    # 🔐 Só valida a chave AQUI
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY não configurada no ambiente.")
+
+    openai.api_key = api_key
+
     prompt = f"""
 Você é um personal trainer profissional.
 
-Crie um treino completo e bem estruturado para um aluno com os seguintes dados:
+Crie um treino completo para:
 - Objetivo: {objetivo}
-- Peso corporal: {peso} kg
+- Peso: {peso} kg
 - Dias de treino por semana: {dias}
 
-Regras:
-- Escolha a divisão de treino ideal (Full Body, ABC, Upper/Lower, etc.)
-- Inclua aquecimento
-- Liste exercícios com séries e repetições
-- Ajuste volume e intensidade ao objetivo
-- Linguagem clara, direta e organizada
-- Formato adequado para envio no Telegram
+Inclua:
+- Divisão correta do treino
+- Aquecimento
+- Exercícios com séries e repetições
+- Linguagem clara para Telegram
 """
 
     response = openai.ChatCompletion.create(
@@ -100,5 +96,4 @@ Regras:
     )
 
     treino = response.choices[0].message.content.strip()
-
     return f"🏋️ **Treino Personalizado**\n\n{treino}"
