@@ -1,77 +1,63 @@
 import os
+from groq import Groq
 from bot import send_message
-from openai import OpenAI
 
-# cria cliente OpenAI
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# inicializa cliente Groq
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-async def process_message(chat_id, text, user):
-    step = user["step"]
+async def process_message(chat_id: int, text: str, user: dict):
 
-    if step == "objetivo":
-        if text not in ["hipertrofia", "emagrecimento", "condicionamento"]:
-            send_message(chat_id, "Escolha: hipertrofia, emagrecimento ou condicionamento.")
-            return
-
+    # ETAPA 1 - OBJETIVO
+    if user["step"] == "objetivo":
         user["objetivo"] = text
         user["step"] = "peso"
-        send_message(chat_id, "Qual é seu peso atual (em kg)?")
+        send_message(chat_id, "Qual seu peso atual (em kg)?")
         return
 
-    if step == "peso":
+    # ETAPA 2 - PESO
+    if user["step"] == "peso":
         try:
             user["peso"] = float(text.replace(",", "."))
         except ValueError:
-            send_message(chat_id, "Digite um peso válido. Ex: 80")
-            return
-
+            raise ValueError("Informe o peso apenas com números (ex: 80)")
         user["step"] = "dias"
         send_message(chat_id, "Quantos dias por semana você treina?")
         return
 
-    if step == "dias":
-        if not text.isdigit():
-            send_message(chat_id, "Digite apenas números. Ex: 3, 4 ou 5")
-            return
-
-        user["dias"] = int(text)
+    # ETAPA 3 - DIAS
+    if user["step"] == "dias":
+        try:
+            user["dias"] = int(text)
+        except ValueError:
+            raise ValueError("Informe apenas o número de dias (ex: 4)")
 
         send_message(chat_id, "⏳ Gerando seu treino personalizado...")
-        treino = gerar_treino_ia(
-            user["objetivo"],
-            user["peso"],
-            user["dias"]
-        )
 
-        send_message(chat_id, treino)
-        user["step"] = "final"
-        return
+        prompt = f"""
+        Crie um treino de musculação detalhado para uma pessoa com:
+        - Objetivo: {user['objetivo']}
+        - Peso: {user['peso']} kg
+        - Dias de treino por semana: {user['dias']}
 
+        Separe por dias, com exercícios, séries e repetições.
+        """
 
-def gerar_treino_ia(objetivo, peso, dias):
-    prompt = f"""
-Você é um personal trainer profissional.
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[
+                    {"role": "system", "content": "Você é um personal trainer experiente."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7
+            )
 
-Crie um treino completo para:
-- Objetivo: {objetivo}
-- Peso: {peso} kg
-- Dias de treino por semana: {dias}
+            treino = response.choices[0].message.content
+            send_message(chat_id, treino)
 
-Inclua:
-• Aquecimento
-• Exercícios principais
-• Séries e repetições
-• Dicas de segurança
-• Organização clara para enviar no Telegram
-"""
+            # reset do usuário
+            user["step"] = "objetivo"
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "user", "content": prompt}
-        ],
-        max_tokens=700
-    )
-
-    texto = response.choices[0].message.content
-    return f"🏋️ *Treino Personalizado*\n\n{texto}"
+        except Exception as e:
+            print("Erro Groq:", e)
+            send_message(chat_id, "⚠️ Ocorreu um erro ao gerar o treino. Tente novamente.")
