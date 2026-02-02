@@ -30,11 +30,7 @@ async def webhook(req: Request):
         send_message(
             chat_id,
             "🏋️‍♂️ Olá! Vamos montar seu treino personalizado.\n\n"
-            "Qual é o seu objetivo?\n"
-            "Digite uma das opções:\n"
-            "• hipertrofia\n"
-            "• emagrecimento\n"
-            "• condicionamento"
+            
         )
         return {"ok": True}
 
