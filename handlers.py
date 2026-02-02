@@ -1,99 +1,88 @@
 import os
 import re
-from bot import send_message
-import openai
+import traceback
+from openai import OpenAI
+
+if not os.getenv("OPENAI_API_KEY"):
+    raise ValueError("OPENAI_API_KEY não definido!")
+
+client = OpenAI()
+
+user_states = {}
+
+def extract_number(text):
+    match = re.search(r"\d+", text)
+    return int(match.group()) if match else None
 
 
-async def process_message(chat_id, text, user):
-    step = user["step"]
-    text = text.lower().strip()
+async def process_message(user_id: str, message: str):
+    message = message.strip()
+    state = user_states.get(user_id, {"step": "ask_days"})
+    step = state.get("step")
 
-    if step == "objetivo":
-        if text not in ["hipertrofia", "emagrecimento", "condicionamento"]:
-            send_message(
-                chat_id,
-                "❌ Objetivo inválido.\nEscolha: hipertrofia, emagrecimento ou condicionamento."
+    try:
+        # 1️⃣ Dias de treino
+        if step == "ask_days":
+            days = extract_number(message)
+
+            if not days or days < 1 or days > 7:
+                return "Quantos dias por semana você treina? (1 a 7)"
+
+            state.update({
+                "days": days,
+                "step": "ask_goal"
+            })
+            user_states[user_id] = state
+
+            return f"Perfeito 💪 Você treina {days} dias. Qual é o seu objetivo?"
+
+        # 2️⃣ Objetivo
+        if step == "ask_goal":
+            if len(message) < 3:
+                return "Me diga melhor seu objetivo 🙂"
+
+            state.update({
+                "goal": message,
+                "step": "generate"
+            })
+            user_states[user_id] = state
+
+        # 3️⃣ Gerar treino
+        if state.get("step") == "generate":
+            days = state.get("days")
+            goal = state.get("goal")
+
+            if not days or not goal:
+                raise ValueError("Estado incompleto para gerar treino")
+
+            prompt = f"""
+            Monte um treino de musculação para:
+            - Dias por semana: {days}
+            - Objetivo: {goal}
+
+            Seja claro, organizado e prático.
+            """
+
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "Você é um personal trainer experiente."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7
             )
-            return
 
-        user["objetivo"] = text
-        user["step"] = "peso"
-        send_message(chat_id, "Qual é seu peso atual (em kg)?")
-        return
+            treino = response.choices[0].message.content
 
-    if step == "peso":
-        peso_texto = text.replace(",", ".")
-        if not peso_texto.replace(".", "", 1).isdigit():
-            send_message(chat_id, "❌ Digite um peso válido (ex: 72 ou 72.5).")
-            return
+            state["step"] = "done"
+            user_states[user_id] = state
 
-        user["peso"] = float(peso_texto)
-        user["step"] = "dias"
-        send_message(chat_id, "Quantos dias por semana você treina?")
-        return
+            return treino
 
-    if step == "dias":
-        numeros = re.findall(r"\d+", text)
+        return "Vamos recomeçar 🙂 Quantos dias por semana você treina?"
 
-        if not numeros:
-            send_message(chat_id, "❌ Digite apenas o número de dias (ex: 3, 4 ou 5).")
-            return
+    except Exception as e:
+        print("❌ ERRO AO GERAR TREINO")
+        print(traceback.format_exc())
 
-        dias = int(numeros[0])
-
-        if dias < 1 or dias > 7:
-            send_message(chat_id, "❌ Escolha entre 1 e 7 dias por semana.")
-            return
-
-        user["dias"] = dias
-
-        try:
-            treino_texto = gerar_treino_ia(
-                user["objetivo"],
-                user["peso"],
-                user["dias"]
-            )
-            send_message(chat_id, treino_texto)
-            user["step"] = "final"
-
-        except Exception as e:
-            send_message(
-                chat_id,
-                "⚠️ Ocorreu um erro ao gerar o treino. Tente novamente em instantes."
-            )
-            print("Erro IA:", e)
-
-        return
-
-
-def gerar_treino_ia(objetivo, peso, dias):
-    # 🔐 Só valida a chave AQUI
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY não configurada no ambiente.")
-
-    openai.api_key = api_key
-
-    prompt = f"""
-Você é um personal trainer profissional.
-
-Crie um treino completo para:
-- Objetivo: {objetivo}
-- Peso: {peso} kg
-- Dias de treino por semana: {dias}
-
-Inclua:
-- Divisão correta do treino
-- Aquecimento
-- Exercícios com séries e repetições
-- Linguagem clara para Telegram
-"""
-
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=650
-    )
-
-    treino = response.choices[0].message.content.strip()
-    return f"🏋️ **Treino Personalizado**\n\n{treino}"
+        return "⚠️ Ocorreu um erro ao gerar o treino. Tente novamente em instantes."
