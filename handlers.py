@@ -1,37 +1,20 @@
 import os
+import json
 import random
 from groq import Groq
 from bot import send_message
 
-# ======================
-# CONFIGURAÇÃO GROQ
-# ======================
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-if not GROQ_API_KEY:
-    raise RuntimeError("GROQ_API_KEY não definida")
-
 client = Groq(api_key=GROQ_API_KEY)
 
-# ======================
-# FUNÇÃO PARA ENVIAR MENSAGENS LONGAS
-# ======================
 def send_long_message(chat_id, text):
-    chunk_size = 4000  # Telegram corta acima de 4096
+    chunk_size = 4000
     for i in range(0, len(text), chunk_size):
         send_message(chat_id, text[i:i+chunk_size])
 
-# ======================
-# FUNÇÃO PARA ESCOLHER TIPO DE TREINO
-# ======================
 def escolher_tipo_treino(dias):
-    if dias <= 4:
-        return random.choice(["ABC", "Full Body"])
-    else:
-        return random.choice(["Push/Pull/Legs", "Upper/Lower"])
+    return random.choice(["ABC", "Full Body"]) if dias <= 4 else random.choice(["Push/Pull/Legs", "Upper/Lower"])
 
-# ======================
-# LISTA DE EXERCÍCIOS VÁLIDOS
-# ======================
 EXERCICIOS_VALIDOS = [
     "Supino Reto", "Supino Inclinado", "Agachamento", "Remada Curvada",
     "Puxada de Cabos", "Flexão de Braço", "Extensão de Perna",
@@ -39,26 +22,17 @@ EXERCICIOS_VALIDOS = [
     "Tríceps Testa", "Elevação Lateral", "Leg Press"
 ]
 
-# ======================
-# HANDLER PRINCIPAL
-# ======================
 async def process_message(chat_id: int, text: str, user: dict):
-
-    text = text.strip().lower()
-    user.setdefault("step", "objetivo")
-
-    # ======================
-    # ETAPA 1 — OBJETIVO
-    # ======================
-    if user["step"] == "objetivo":
-        send_message(
-            chat_id,
-            "🎯 Qual é seu objetivo?\n\n"
-            "- Hipertrofia\n"
-            "- Emagrecimento\n"
-            "- Definição\n"
-            "- Condicionamento físico"
-        )
+    # Se for o início ou o bot resetado
+    if text == "/start" or user.get("step") == "objetivo":
+        keyboard = {
+            "inline_keyboard": [
+                [{"text": "💪 Hipertrofia", "callback_data": "hipertrofia"}],
+                [{"text": "🏃 Emagrecimento", "callback_data": "emagrecimento"}],
+                [{"text": "🧘 Condicionamento", "callback_data": "condicionamento"}]
+            ]
+        }
+        send_message(chat_id, "🎯 Qual é seu objetivo?", reply_markup=json.dumps(keyboard))
         user["step"] = "objetivo_resposta"
         return
 
@@ -68,142 +42,67 @@ async def process_message(chat_id: int, text: str, user: dict):
         send_message(chat_id, "⚖️ Qual seu peso atual (em kg)?\nEx: 80")
         return
 
-    # ======================
-    # ETAPA 2 — PESO
-    # ======================
     if user["step"] == "peso":
         try:
             user["peso"] = float(text.replace(",", "."))
-        except ValueError:
-            send_message(chat_id, "❌ Informe apenas números.\nEx: 80")
-            return
-
-        user["step"] = "dias"
-        send_message(chat_id, "📅 Quantos dias por semana você treina?\n(3 a 6)")
+            user["step"] = "dias"
+            send_message(chat_id, "📅 Quantos dias por semana você treina? (3 a 6)")
+        except:
+            send_message(chat_id, "❌ Informe apenas números. Ex: 80")
         return
 
-    # ======================
-    # ETAPA 3 — DIAS
-    # ======================
     if user["step"] == "dias":
         try:
             dias = int(text)
-            if dias < 3 or dias > 6:
-                raise ValueError
-            user["dias"] = dias
-        except ValueError:
-            send_message(chat_id, "❌ Informe um número válido entre 3 e 6 dias.")
-            return
-
-        user["step"] = "nivel"
-        send_message(
-            chat_id,
-            "🏋️ Qual seu nível de treino?\n\n"
-            "1️⃣ Iniciante\n"
-            "2️⃣ Intermediário\n"
-            "3️⃣ Avançado"
-        )
+            if 3 <= dias <= 6:
+                user["dias"] = dias
+                user["step"] = "nivel"
+                keyboard = {
+                    "inline_keyboard": [
+                        [{"text": "Iniciante", "callback_data": "1"}],
+                        [{"text": "Intermediário", "callback_data": "2"}],
+                        [{"text": "Avançado", "callback_data": "3"}]
+                    ]
+                }
+                send_message(chat_id, "🏋️ Qual seu nível?", reply_markup=json.dumps(keyboard))
+            else: raise ValueError
+        except:
+            send_message(chat_id, "❌ Informe um número entre 3 e 6.")
         return
 
-    # ======================
-    # ETAPA 4 — NÍVEL
-    # ======================
     if user["step"] == "nivel":
         niveis = {"1": "Iniciante", "2": "Intermediário", "3": "Avançado"}
-        if text not in niveis:
-            send_message(chat_id, "❌ Responda com 1, 2 ou 3.")
-            return
-
-        user["nivel"] = niveis[text]
+        user["nivel"] = niveis.get(text, "Iniciante")
         user["step"] = "tempo"
-        send_message(
-            chat_id,
-            "⏱️ Quanto tempo por treino?\n\n"
-            "40 minutos\n"
-            "60 minutos\n"
-            "90 minutos"
-        )
+        keyboard = {
+            "inline_keyboard": [
+                [{"text": "40 min", "callback_data": "40"}, {"text": "60 min", "callback_data": "60"}, {"text": "90 min", "callback_data": "90"}]
+            ]
+        }
+        send_message(chat_id, "⏱️ Tempo por treino?", reply_markup=json.dumps(keyboard))
         return
 
-    # ======================
-    # ETAPA 5 — TEMPO
-    # ======================
     if user["step"] == "tempo":
-        if text not in ["40", "60", "90"]:
-            send_message(chat_id, "❌ Informe 40, 60 ou 90 minutos.")
-            return
-
         user["tempo"] = text
-        send_message(chat_id, "⏳ Gerando seu treino personalizado...")
-        user["step"] = "gerando"
-
-        # ======================
-        # ESCOLHER TIPO DE TREINO
-        # ======================
+        send_message(chat_id, "⏳ Gerando seu treino... aguarde.")
+        
         tipo_treino = escolher_tipo_treino(user["dias"])
-
-        # ======================
-        # PROMPT COM LISTA DE EXERCÍCIOS VÁLIDOS
-        # ======================
         exercicios_str = ", ".join(EXERCICIOS_VALIDOS)
-
-        prompt = f"""
-Você é um PERSONAL TRAINER PROFISSIONAL brasileiro.
-
-Crie um TREINO DE MUSCULAÇÃO realista, seguro e bem estruturado do tipo: {tipo_treino}.
-
-Dados do aluno:
-- Objetivo: {user['objetivo']}
-- Peso: {user['peso']} kg
-- Dias por semana: {user['dias']}
-- Nível: {user['nivel']}
-- Tempo por treino: {user['tempo']} minutos
-
-REGRAS:
-- Corrija erros de escrita, use apenas português correto
-- Use apenas os seguintes exercícios: {exercicios_str}
-- Não invente exercícios
-- Não repita exercícios no mesmo treino
-- Separe claramente os treinos (A, B, C… ou Full Body)
-- Inclua:
-  • Aquecimento
-  • Séries x repetições
-  • Descanso entre séries
-- Formato limpo para Telegram, sem excesso de asteriscos
-
-⚠️ No final, inclua uma dica curta de progressão.
-"""
+        
+        prompt = f"Você é um PERSONAL TRAINER. Crie um treino {tipo_treino} para objetivo {user['objetivo']}, nível {user['nivel']}, {user['tempo']} min. Use apenas: {exercicios_str}."
 
         try:
             response = client.chat.completions.create(
                 model="llama-3.1-8b-instant",
-                messages=[
-                    {"role": "system", "content": "Você é um personal trainer experiente."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.5,
-                max_tokens=2500
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.5
             )
-
             treino = response.choices[0].message.content.strip()
-
-            # ======================
-            # ENVIO EM BLOCO
-            # ======================
-            blocos = [b.strip() for b in treino.replace("*", "").split("\n\n") if b.strip()]
-            for bloco in blocos:
-                send_long_message(chat_id, f"{bloco}")
-
-        except Exception as e:
-            print("Erro Groq:", e)
-            send_message(chat_id, "⚠️ Erro ao gerar o treino. Tente novamente.")
-
-        # ======================
-        # RESET SEGURO DO FLUXO
-        # ======================
-        user_keys = ["objetivo", "peso", "dias", "nivel", "tempo"]
-        for k in user_keys:
-            user.pop(k, None)
-
+            send_long_message(chat_id, treino)
+            send_message(chat_id, "✅ Treino finalizado! Digite /start para criar um novo.")
+        except:
+            send_message(chat_id, "⚠️ Erro ao gerar. Tente novamente.")
+        
+        # Reset
+        user.clear()
         user["step"] = "objetivo"
-        return
