@@ -2,7 +2,9 @@ import os
 from groq import Groq
 from bot import send_message
 
-# Cliente Groq
+# ======================
+# CONFIGURAÇÃO GROQ
+# ======================
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
     raise RuntimeError("GROQ_API_KEY não definida")
@@ -10,104 +12,165 @@ if not GROQ_API_KEY:
 client = Groq(api_key=GROQ_API_KEY)
 
 
+# ======================
+# HANDLER PRINCIPAL
+# ======================
 async def process_message(chat_id: int, text: str, user: dict):
 
-    # ETAPA 1 — OBJETIVO
-    if user["step"] == "objetivo":
-        if text not in ["hipertrofia", "emagrecimento", "condicionamento"]:
-            raise ValueError(
-                "Digite um objetivo válido:\n"
-                "• hipertrofia\n"
-                "• emagrecimento\n"
-                "• condicionamento"
-            )
+    text = text.strip().lower()
 
-        user["objetivo"] = text
-        user["step"] = "peso"
-        send_message(chat_id, "Qual é o seu peso atual (em kg)?")
+    # INICIALIZA USUÁRIO
+    user.setdefault("step", "objetivo")
+
+    # ======================
+    # ETAPA 1 — OBJETIVO
+    # ======================
+    if user["step"] == "objetivo":
+        send_message(
+            chat_id,
+            "🎯 Qual é seu objetivo?\n\n"
+            "Exemplo:\n"
+            "- Hipertrofia\n"
+            "- Emagrecimento\n"
+            "- Definição\n"
+            "- Condicionamento físico"
+        )
+        user["step"] = "objetivo_resposta"
         return
 
+    if user["step"] == "objetivo_resposta":
+        user["objetivo"] = text
+        user["step"] = "peso"
+        send_message(chat_id, "⚖️ Qual seu peso atual (em kg)?\nEx: 80")
+        return
+
+    # ======================
     # ETAPA 2 — PESO
+    # ======================
     if user["step"] == "peso":
         try:
             user["peso"] = float(text.replace(",", "."))
         except ValueError:
-            raise ValueError("Informe apenas números. Ex: 80")
+            send_message(chat_id, "❌ Informe apenas números.\nEx: 80")
+            return
 
         user["step"] = "dias"
-        send_message(chat_id, "Quantos dias por semana você treina? (1 a 6)")
+        send_message(chat_id, "📅 Quantos dias por semana você treina?\n(3 a 6)")
         return
 
+    # ======================
     # ETAPA 3 — DIAS
+    # ======================
     if user["step"] == "dias":
         try:
             dias = int(text)
-            if dias < 1 or dias > 6:
+            if dias < 3 or dias > 6:
                 raise ValueError
             user["dias"] = dias
         except ValueError:
-            raise ValueError("Informe um número de dias válido (1 a 6)")
+            send_message(chat_id, "❌ Informe um número válido entre 3 e 6 dias.")
+            return
 
+        user["step"] = "nivel"
+        send_message(
+            chat_id,
+            "🏋️ Qual seu nível de treino?\n\n"
+            "1️⃣ Iniciante\n"
+            "2️⃣ Intermediário\n"
+            "3️⃣ Avançado"
+        )
+        return
+
+    # ======================
+    # ETAPA 4 — NÍVEL
+    # ======================
+    if user["step"] == "nivel":
+        niveis = {"1": "Iniciante", "2": "Intermediário", "3": "Avançado"}
+        if text not in niveis:
+            send_message(chat_id, "❌ Responda com 1, 2 ou 3.")
+            return
+
+        user["nivel"] = niveis[text]
+        user["step"] = "tempo"
+        send_message(
+            chat_id,
+            "⏱️ Quanto tempo por treino?\n\n"
+            "40 minutos\n"
+            "60 minutos\n"
+            "90 minutos"
+        )
+        return
+
+    # ======================
+    # ETAPA 5 — TEMPO
+    # ======================
+    if user["step"] == "tempo":
+        if text not in ["40", "60", "90"]:
+            send_message(chat_id, "❌ Informe 40, 60 ou 90 minutos.")
+            return
+
+        user["tempo"] = text
         send_message(chat_id, "⏳ Gerando seu treino personalizado...")
+        user["step"] = "gerando"
 
+        # ======================
+        # PROMPT PROFISSIONAL
+        # ======================
         prompt = f"""
-Você é um PERSONAL TRAINER experiente.
+Você é um PERSONAL TRAINER PROFISSIONAL brasileiro.
 
-Crie um treino de musculação REALISTA e PROFISSIONAL seguindo as regras abaixo:
+Crie um TREINO DE MUSCULAÇÃO realista, seguro e bem estruturado.
 
-REGRAS IMPORTANTES:
-- Use SOMENTE nomes corretos de exercícios de academia no Brasil
+Dados do aluno:
+- Objetivo: {user['objetivo']}
+- Peso: {user['peso']} kg
+- Dias por semana: {user['dias']}
+- Nível: {user['nivel']}
+- Tempo por treino: {user['tempo']} minutos
+
+REGRAS OBRIGATÓRIAS:
+- Use APENAS nomes corretos em português do Brasil
 - NÃO invente exercícios
-- NÃO use termos como "barra fixa" para tudo
-- NÃO repita exercícios iguais em dias diferentes
-- NÃO escreva introduções longas
-- NÃO corte o treino no final
-- Organize bem para leitura no Telegram
-
-DADOS DO ALUNO:
-Objetivo: {user['objetivo']}
-Peso: {user['peso']} kg
-Dias por semana: {user['dias']}
-
-ESTRUTURA OBRIGATÓRIA:
-- Divida os treinos como Treino A, B, C (e D se necessário)
-- Para cada treino, informe:
-  • Grupos musculares
+- NÃO use termos em espanhol ou inglês
+- NÃO repita exercícios no mesmo treino
+- Separe claramente os treinos (A, B, C…)
+- Inclua:
   • Aquecimento curto
-  • Exercícios (com séries e repetições)
-  • Tempo de descanso
+  • Exercícios com séries x repetições
+  • Descanso entre séries
+- Linguagem clara para Telegram
+- Sem texto introdutório longo
 
-EXEMPLOS DE EXERCÍCIOS VÁLIDOS:
-Supino reto, supino inclinado, crucifixo, desenvolvimento com halteres,
-elevação lateral, puxada frontal, remada curvada, agachamento livre,
-leg press, cadeira extensora, mesa flexora, rosca direta, tríceps pulley,
-panturrilha em pé, prancha abdominal.
+Formato esperado:
 
-FORMATAÇÃO:
-- Use títulos claros
-- Use listas numeradas
-- Linguagem objetiva e profissional
+🏋️‍♂️ Treino A – Peito, Ombros e Tríceps
+Aquecimento:
+Exercícios:
+Descanso:
+
+⚠️ No final, inclua uma dica curta de progressão.
 """
 
         try:
             response = client.chat.completions.create(
                 model="llama-3.1-8b-instant",
                 messages=[
-                    {"role": "system", "content": "Você é um personal trainer profissional."},
+                    {"role": "system", "content": "Você é um personal trainer experiente."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.4,
-                max_tokens=900
+                temperature=0.5,
+                max_tokens=800
             )
 
             treino = response.choices[0].message.content.strip()
 
             send_message(chat_id, f"🏋️‍♂️ *Treino Personalizado*\n\n{treino}")
 
-            # reinicia fluxo
-            user["step"] = "objetivo"
-
         except Exception as e:
             print("Erro Groq:", e)
-            send_message(chat_id, "⚠️ Ocorreu um erro ao gerar o treino. Tente novamente.")
-            user["step"] = "objetivo"
+            send_message(chat_id, "⚠️ Erro ao gerar o treino. Tente novamente.")
+
+        # RESET DO FLUXO
+        user.clear()
+        user["step"] = "objetivo"
+        return
