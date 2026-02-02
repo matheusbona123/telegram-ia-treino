@@ -55,9 +55,9 @@ async def process_message(chat_id: int, text: str, user: dict):
         try:
             user["peso"] = float(text.replace(",", "."))
             user["step"] = "dias"
-            send_message(chat_id, "📅 **Quantos dias por semana vais treinar? (3-6)**")
+            send_message(chat_id, "📅 **Quantos dias vais treinar? (3-6)**")
         except:
-            send_message(chat_id, "❌ Indica apenas o número (ex: 80).")
+            send_message(chat_id, "❌ Indica apenas o número.")
         return
 
     if user["step"] == "dias":
@@ -76,7 +76,7 @@ async def process_message(chat_id: int, text: str, user: dict):
                 send_message(chat_id, "🏋️ **Qual o teu nível?**", reply_markup=json.dumps(keyboard))
             else: raise ValueError
         except:
-            send_message(chat_id, "❌ Escolhe um número entre 3 e 6.")
+            send_message(chat_id, "❌ Escolha entre 3 e 6.")
         return
 
     if user["step"] == "nivel":
@@ -95,27 +95,26 @@ async def process_message(chat_id: int, text: str, user: dict):
         send_message(chat_id, "⏳ **Gerando sua ficha de exercícios...**")
         
         tipo_treino = escolher_tipo_treino(user["dias"])
-        exercicios_str = ", ".join(EXERCICIOS_VALIDOS)
+        ex_str = ", ".join(EXERCICIOS_VALIDOS)
         
-        prompt = f"""
-Você é um Personal Trainer profissional. Gere uma ficha de musculação técnica.
-Aluno: {user['nivel']} | Objetivo: {user['objetivo']} | Divisão: {tipo_treino}
-
-REGRAS RÍGIDAS (NÃO DESCUMPRA):
-1. Use APENAS exercícios INDIVIDUAIS desta lista: {exercicios_str}.
-2. PROIBIDO inventar ou combinar nomes (ex: Não existe "Supino com Rosca").
-3. NÃO ESCREVA DICAS, nem explicações, nem avisos médicos.
-4. Liste exatamente de 6 a 8 exercícios distintos por treino.
-
-ESTRUTURA OBRIGATÓRIA:
-**TREINO [Letra] - [Nome do Grupo]**
-
-📍 **[Nome do Exercício]**
-🔄 `3 séries de 12 reps` | ⏳ `60s descanso`
-
-(Pule uma linha entre exercícios)
-"""
+        prompt = f"Gere um treino para nível {user['nivel']} com foco em {user['objetivo']}. Divisão: {tipo_treino}. Use APENAS estes exercícios: {ex_str}. Regras: Sem dicas técnicas, sem combinar exercícios, liste 6 exercícios por treino. Formato: 📍 **Nome** | 🔄 `3x12` | ⏳ `60s`."
 
         try:
             response = client.chat.completions.create(
-                model="
+                model="llama-3.1-8b-instant",
+                messages=[
+                    {"role": "system", "content": "Você é um personal trainer que gera apenas listas diretas em Markdown."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.2
+            )
+            treino = response.choices[0].message.content.strip()
+            send_long_message(chat_id, treino)
+            send_message(chat_id, "✅ **Treino pronto!** /start para recomeçar.")
+            
+        except Exception as e:
+            print(f"Erro na Groq: {e}")
+            send_message(chat_id, "⚠️ Erro ao gerar treino.")
+
+        user.clear()
+        user["step"] = "objetivo"
