@@ -1,4 +1,5 @@
 import os
+import random
 from groq import Groq
 from bot import send_message
 
@@ -11,7 +12,6 @@ if not GROQ_API_KEY:
 
 client = Groq(api_key=GROQ_API_KEY)
 
-
 # ======================
 # FUNÇÃO PARA ENVIAR MENSAGENS LONGAS
 # ======================
@@ -19,6 +19,21 @@ def send_long_message(chat_id, text):
     chunk_size = 4000  # Telegram corta acima de 4096
     for i in range(0, len(text), chunk_size):
         send_message(chat_id, text[i:i+chunk_size])
+
+
+# ======================
+# FUNÇÃO PARA ESCOLHER TIPO DE TREINO
+# ======================
+def escolher_tipo_treino(dias):
+    """
+    Retorna tipo de treino baseado na quantidade de dias:
+    - 3 a 4 dias: Full Body ou ABC
+    - 5 a 6 dias: Push/Pull/Legs ou Upper/Lower
+    """
+    if dias <= 4:
+        return random.choice(["ABC", "Full Body"])
+    else:
+        return random.choice(["Push/Pull/Legs", "Upper/Lower"])
 
 
 # ======================
@@ -120,12 +135,14 @@ async def process_message(chat_id: int, text: str, user: dict):
         user["step"] = "gerando"
 
         # ======================
-        # PROMPT PROFISSIONAL
+        # ESCOLHER TIPO DE TREINO
         # ======================
+        tipo_treino = escolher_tipo_treino(user["dias"])
+
         prompt = f"""
 Você é um PERSONAL TRAINER PROFISSIONAL brasileiro.
 
-Crie um TREINO DE MUSCULAÇÃO realista, seguro e bem estruturado.
+Crie um TREINO DE MUSCULAÇÃO realista, seguro e bem estruturado do tipo: {tipo_treino}
 
 Dados do aluno:
 - Objetivo: {user['objetivo']}
@@ -139,20 +156,13 @@ REGRAS OBRIGATÓRIAS:
 - NÃO invente exercícios
 - NÃO use termos em espanhol ou inglês
 - NÃO repita exercícios no mesmo treino
-- Separe claramente os treinos (A, B, C…)
+- Separe claramente os treinos (A, B, C… ou Full Body)
 - Inclua:
   • Aquecimento curto
   • Exercícios com séries x repetições
   • Descanso entre séries
 - Linguagem clara para Telegram
 - Sem texto introdutório longo
-
-Formato esperado:
-
-🏋️‍♂️ Treino A – Peito, Ombros e Tríceps
-Aquecimento:
-Exercícios:
-Descanso:
 
 ⚠️ No final, inclua uma dica curta de progressão.
 """
@@ -168,7 +178,7 @@ Descanso:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.5,
-                max_tokens=2000  # aumentei para permitir treinos longos
+                max_tokens=2500  # aumenta para treinos completos
             )
 
             treino = response.choices[0].message.content.strip()
@@ -176,13 +186,23 @@ Descanso:
             # ======================
             # ENVIO AUTOMÁTICO EM BLOCO
             # ======================
-            send_long_message(chat_id, f"🏋️‍♂️ *Treino Personalizado*\n\n{treino}")
+            # Se houver múltiplos treinos no texto (A, B, C ou Full Body), separa por linha dupla
+            blocos = treino.split("\n\n🏋️‍♂️")
+            for i, bloco in enumerate(blocos):
+                if i > 0:
+                    bloco = "🏋️‍♂️" + bloco  # adiciona título novamente
+                send_long_message(chat_id, f"*Treino ({tipo_treino})*\n\n{bloco}")
 
         except Exception as e:
             print("Erro Groq:", e)
             send_message(chat_id, "⚠️ Erro ao gerar o treino. Tente novamente.")
 
-        # RESET DO FLUXO
-        user.clear()
+        # ======================
+        # RESET SEGURO DO FLUXO
+        # ======================
+        user_keys = ["objetivo", "peso", "dias", "nivel", "tempo"]
+        for k in user_keys:
+            user.pop(k, None)
+
         user["step"] = "objetivo"
         return
