@@ -20,7 +20,6 @@ def send_long_message(chat_id, text):
     for i in range(0, len(text), chunk_size):
         send_message(chat_id, text[i:i+chunk_size])
 
-
 # ======================
 # FUNÇÃO PARA ESCOLHER TIPO DE TREINO
 # ======================
@@ -34,7 +33,6 @@ def escolher_tipo_treino(dias):
         return random.choice(["ABC", "Full Body"])
     else:
         return random.choice(["Push/Pull/Legs", "Upper/Lower"])
-
 
 # ======================
 # HANDLER PRINCIPAL
@@ -142,7 +140,7 @@ async def process_message(chat_id: int, text: str, user: dict):
         prompt = f"""
 Você é um PERSONAL TRAINER PROFISSIONAL brasileiro.
 
-Crie um TREINO DE MUSCULAÇÃO realista, seguro e bem estruturado do tipo: {tipo_treino}
+Crie um TREINO DE MUSCULAÇÃO realista, seguro e bem estruturado do tipo: {tipo_treino}.
 
 Dados do aluno:
 - Objetivo: {user['objetivo']}
@@ -151,26 +149,22 @@ Dados do aluno:
 - Nível: {user['nivel']}
 - Tempo por treino: {user['tempo']} minutos
 
-REGRAS OBRIGATÓRIAS:
-- Use APENAS nomes corretos em português do Brasil
-- NÃO invente exercícios
-- NÃO use termos em espanhol ou inglês
-- NÃO repita exercícios no mesmo treino
+REGRAS:
+- Corrija erros de escrita, use apenas português correto (ex: "pecho" → "peito")
+- Use nomes corretos em português do Brasil
+- Não invente exercícios
+- Não repita exercícios no mesmo treino
 - Separe claramente os treinos (A, B, C… ou Full Body)
 - Inclua:
-  • Aquecimento curto
-  • Exercícios com séries x repetições
+  • Aquecimento
+  • Séries x repetições
   • Descanso entre séries
-- Linguagem clara para Telegram
-- Sem texto introdutório longo
+- Formato limpo para Telegram, sem excesso de asteriscos
 
 ⚠️ No final, inclua uma dica curta de progressão.
 """
 
         try:
-            # ======================
-            # CHAMADA AO GROQ COM MAIS TOKENS
-            # ======================
             response = client.chat.completions.create(
                 model="llama-3.1-8b-instant",
                 messages=[
@@ -178,20 +172,18 @@ REGRAS OBRIGATÓRIAS:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.5,
-                max_tokens=2500  # aumenta para treinos completos
+                max_tokens=2500
             )
 
             treino = response.choices[0].message.content.strip()
 
             # ======================
-            # ENVIO AUTOMÁTICO EM BLOCO
+            # ENVIO EM BLOCO
             # ======================
-            # Se houver múltiplos treinos no texto (A, B, C ou Full Body), separa por linha dupla
-            blocos = treino.split("\n\n🏋️‍♂️")
-            for i, bloco in enumerate(blocos):
-                if i > 0:
-                    bloco = "🏋️‍♂️" + bloco  # adiciona título novamente
-                send_long_message(chat_id, f"*Treino ({tipo_treino})*\n\n{bloco}")
+            # Divide por treinos (A/B/C/Full Body) usando títulos
+            blocos = [b.strip() for b in treino.replace("*", "").split("\n\n") if b.strip()]
+            for bloco in blocos:
+                send_long_message(chat_id, f"{bloco}")
 
         except Exception as e:
             print("Erro Groq:", e)
