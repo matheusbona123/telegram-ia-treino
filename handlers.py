@@ -24,15 +24,20 @@ def send_long_message(chat_id, text):
 # FUNÇÃO PARA ESCOLHER TIPO DE TREINO
 # ======================
 def escolher_tipo_treino(dias):
-    """
-    Retorna tipo de treino baseado na quantidade de dias:
-    - 3 a 4 dias: Full Body ou ABC
-    - 5 a 6 dias: Push/Pull/Legs ou Upper/Lower
-    """
     if dias <= 4:
         return random.choice(["ABC", "Full Body"])
     else:
         return random.choice(["Push/Pull/Legs", "Upper/Lower"])
+
+# ======================
+# LISTA DE EXERCÍCIOS VÁLIDOS
+# ======================
+EXERCICIOS_VALIDOS = [
+    "Supino Reto", "Supino Inclinado", "Agachamento", "Remada Curvada",
+    "Puxada de Cabos", "Flexão de Braço", "Extensão de Perna",
+    "Cadeira Abdutora", "Levantamento Terra", "Rosca Direta",
+    "Tríceps Testa", "Elevação Lateral", "Leg Press"
+]
 
 # ======================
 # HANDLER PRINCIPAL
@@ -137,6 +142,11 @@ async def process_message(chat_id: int, text: str, user: dict):
         # ======================
         tipo_treino = escolher_tipo_treino(user["dias"])
 
+        # ======================
+        # PROMPT COM LISTA DE EXERCÍCIOS VÁLIDOS
+        # ======================
+        exercicios_str = ", ".join(EXERCICIOS_VALIDOS)
+
         prompt = f"""
 Você é um PERSONAL TRAINER PROFISSIONAL brasileiro.
 
@@ -150,8 +160,8 @@ Dados do aluno:
 - Tempo por treino: {user['tempo']} minutos
 
 REGRAS:
-- Corrija erros de escrita, use apenas português correto (ex: "pecho" → "peito")
-- Use nomes corretos em português do Brasil
+- Corrija erros de escrita, use apenas português correto
+- Use apenas os seguintes exercícios: {exercicios_str}
 - Não invente exercícios
 - Não repita exercícios no mesmo treino
 - Separe claramente os treinos (A, B, C… ou Full Body)
@@ -180,7 +190,6 @@ REGRAS:
             # ======================
             # ENVIO EM BLOCO
             # ======================
-            # Divide por treinos (A/B/C/Full Body) usando títulos
             blocos = [b.strip() for b in treino.replace("*", "").split("\n\n") if b.strip()]
             for bloco in blocos:
                 send_long_message(chat_id, f"{bloco}")
